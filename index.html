@@ -14,7 +14,8 @@
   var url = window.DV_DATA_URL || 'https://fubon-dividends.wupinyi.workers.dev/api/dividends';
   var isWorker = url.startsWith('http') && !url.includes('github.io');
   var token = localStorage.getItem('dv_token');
-  if (isWorker && !token) { document.documentElement.style.visibility = 'hidden'; }
+  var hashToken = new URLSearchParams(location.hash.slice(1)).get('token');
+  if (isWorker && !token && !hashToken) { document.documentElement.style.visibility = 'hidden'; }
 })();
 </script>
 <style>
@@ -581,6 +582,7 @@ function dvLoad() {
     .then((t) => {
       if (!t) return;
       const rows = t.trim().startsWith('[') || t.trim().startsWith('{') ? (() => { const j = JSON.parse(t); return Array.isArray(j) ? j : (j.rows || j.data || []); })() : d3.csvParse(t);
+      document.documentElement.style.visibility = '';
       dash._set('divs', { status: 'ok', data: rows });
     })
     .catch((e) => { console.error(e); dash._set('divs', { status: 'error', data: [] }); });
