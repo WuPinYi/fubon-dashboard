@@ -558,14 +558,11 @@ const dvToken = localStorage.getItem('dv_token');
 function dvLoad() {
   const url = window.DV_DATA_URL;
   const isWorker = url.startsWith('http') && !url.includes('github.io');
-  const opts = isWorker && dvToken ? { headers: { Authorization: `Bearer ${dvToken}` } } : { credentials: 'include' };
+  const opts = dvToken ? { headers: { Authorization: `Bearer ${dvToken}` } } : {};
+  const authRedirect = () => { location.href = `${url.replace(/\/api\/dividends.*/, '')}/auth/line?redirect=${encodeURIComponent(location.href)}`; };
   fetch(url, opts)
     .then((r) => {
-      if (r.status === 401 && isWorker) {
-        // 未登入 → 導向 LINE Login
-        location.href = `${url.replace(/\/api\/dividends.*/, '')}/auth/line?redirect=${encodeURIComponent(location.href)}`;
-        return;
-      }
+      if (r.status === 401 && isWorker) { authRedirect(); return; }
       if (!r.ok) throw new Error(r.status);
       return r.text();
     })
@@ -574,7 +571,7 @@ function dvLoad() {
       const rows = t.trim().startsWith('[') || t.trim().startsWith('{') ? (() => { const j = JSON.parse(t); return Array.isArray(j) ? j : (j.rows || j.data || []); })() : d3.csvParse(t);
       dash._set('divs', { status: 'ok', data: rows });
     })
-    .catch((e) => { console.error(e); dash._set('divs', { status: 'error', data: [] }); });
+    .catch((e) => { console.error(e); if (isWorker && !dvToken) { authRedirect(); } else { dash._set('divs', { status: 'error', data: [] }); } });
 }
 dvLoad();
 
