@@ -175,7 +175,7 @@ body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-fami
 
 <script>
 // 設定：資料來源。之後接 Cloudflare Worker 時改成 Worker 的網址，例如 'https://xxx.workers.dev/api/dividends'
-window.DV_DATA_URL = window.DV_DATA_URL || 'data.csv';
+window.DV_DATA_URL = window.DV_DATA_URL || 'https://fubon-dividends.wupinyi.workers.dev/api/dividends';
 
 // 小型執行環境：提供 dash.data / dash.calc / dash.draw，讓下方頁面程式碼不用改
 window.dash = (() => {
