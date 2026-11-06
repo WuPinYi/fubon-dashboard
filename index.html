@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>2026 每月配息</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+<body>
+<style>
+.dv { font-family: var(--font-anthropic-sans); color: var(--color-fg); display: grid; gap: var(--cds-gap-lg); }
+.dv-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; }
+.dv-take { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); }
+.dv .dv-take b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); font-variant-numeric: tabular-nums; }
+.dv-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--cds-gap-md); }
+.dv-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+.dv-k-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; }
+.dv-k-val { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: var(--cds-gap-xs) 0 0; font-variant-numeric: tabular-nums; }
+.dv-k-sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 0; font-variant-numeric: tabular-nums; }
+.dv-h { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.dv-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 var(--cds-gap-md); }
+.dv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+.dv-chart { position: relative; min-height: 300px; }
+.dv-stock { position: relative; min-height: 300px; }
+.dv-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; min-width: 11rem; z-index: 2; }
+.dv-tip-h { color: var(--cds-text-secondary); margin-bottom: 2px; }
+.dv-tip-row { display: flex; justify-content: space-between; gap: var(--cds-gap-md); }
+.dv-tip-tot { font-weight: var(--cds-font-weight-medium); border-top: 1px solid var(--cds-border); margin-top: 2px; padding-top: 2px; }
+.dv-bar { cursor: pointer; }
+.dv-fail { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); min-height: inherit; height: 100%; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.dv-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+.dv-tbar { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); flex-wrap: wrap; }
+.dv-btn { font: inherit; font-size: var(--cds-font-size-caption); background-color: var(--color-bg); color: var(--color-fg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); cursor: pointer; }
+.dv-sel { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dv-tablebox { max-height: 30rem; overflow: auto; container-type: inline-size; }
+@container (max-width: 620px) { .dv-table .dv-opt { display: none; } }
+.dv-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.dv-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.dv-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.dv-table .num { text-align: right; }
+@media (max-width: 560px) { .dv-table .dv-opt { display: none; } }
+.dv [data-dash-source-state=empty] { color: transparent; }
+.dv [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+.dv-ctrls { display: flex; align-items: center; gap: var(--cds-gap-sm); flex-wrap: wrap; }
+.dv-seg { display: inline-flex; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); overflow: hidden; }
+.dv-seg button { font: inherit; font-size: var(--cds-font-size-caption); background-color: var(--color-bg); color: var(--color-fg-muted); border: 0; padding: var(--cds-pad-xs) var(--cds-pad-sm); cursor: pointer; }
+.dv-seg button + button { border-left: 1px solid var(--color-border-line); }
+.dv-seg button[aria-pressed=true] { background-color: var(--color-panel); color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.dv-month { font-size: var(--cds-font-size-caption); }
+.dv-pie { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-md); }
+.dv-pie svg { flex: 0 0 auto; }
+.dv-pie path { cursor: default; }
+.dv-legend { list-style: none; margin: 0; padding: 0; flex: 1 1 12rem; min-width: 0; display: grid; gap: 4px; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.dv-legend li { display: grid; grid-template-columns: .625rem 1fr auto auto; align-items: center; gap: var(--cds-gap-xs); }
+.dv-legend .sw { width: .625rem; height: .625rem; border-radius: 2px; }
+.dv-legend .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-legend .pc { color: var(--color-fg-muted); }
+.dv-legend .am { text-align: right; min-width: 4.5rem; }
+.dv-empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+
+:root {
+  --font-anthropic-sans: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-anthropic-serif: "Noto Serif TC", Georgia, "Songti TC", serif;
+  --color-bg: #f6f5f1; --color-panel: #ffffff; --color-fg: #1f1e1b; --color-fg-muted: #6b6860;
+  --color-border-line: #e4e1d8; --color-bad: #b5545c;
+  --cds-text-secondary: #6b6860; --cds-surface-popover: #ffffff; --cds-border: #e4e1d8;
+  --cds-shadow-popover: 0 4px 16px rgba(0,0,0,.08);
+  --cds-chart-grid: #ecebe5; --cds-chart-muted: #c9c6bd;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 12px; --cds-gap-lg: 20px;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-lg: 20px; --cds-radius: 8px;
+  --cds-font-size-caption: 13px; --cds-font-size-body: 15px; --cds-font-size-heading: 17px; --cds-font-size-title: 30px;
+  --cds-font-weight-medium: 600; --cds-dur-slow: .3s;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1c1b19; --color-panel: #252421; --color-fg: #ecebe6; --color-fg-muted: #a19e95;
+    --color-border-line: #36342f; --cds-text-secondary: #a19e95; --cds-surface-popover: #2c2b27; --cds-border: #3d3b35;
+    --cds-shadow-popover: 0 4px 16px rgba(0,0,0,.4); --cds-chart-grid: #33312c; --cds-chart-muted: #55524b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); -webkit-text-size-adjust: 100%; }
+.page { max-width: 1200px; margin-inline: auto; padding: clamp(12px, 3vw, 32px); }
+.dash-skeleton { color: transparent !important; position: relative; }
+.dash-skeleton::after { content: ""; position: absolute; left: 0; top: 50%; width: 6em; max-width: 80%; height: .8em; transform: translateY(-50%); border-radius: 4px; background: var(--color-border-line); animation: dvpulse 1.2s ease-in-out infinite; }
+.dv-chart.dash-skeleton::after, .dv-stock.dash-skeleton::after { top: 0; width: 100%; max-width: none; height: 100%; transform: none; }
+@keyframes dvpulse { 50% { opacity: .5; } }
+.dash-select { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background-color: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); }
+.dv-error { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+</style>
+
+<div class="page">
+<div class="dv">
+  <header>
+    <h1 class="dv-title" id="top">2026 每月配息</h1>
+    <p class="dv-take">全年預估股利共 <b data-draw="t-total" data-source="summary" data-row="0" data-field="total">—</b> 元，最多的月份是 <b data-draw="t-peak" data-source="summary" data-row="0" data-field="peakLabel">—</b>，單月 <b data-draw="t-peakAmt" data-source="summary" data-row="0" data-field="peakAmount">—</b> 元。</p>
+  </header>
+
+  <section class="dv-kpis" aria-label="重點數字">
+    <div class="dv-card">
+      <p class="dv-k-label">全年預估股利</p>
+      <p class="dv-k-val dash-skeleton" data-draw="k-total" data-source="summary" data-row="0" data-field="total">—</p>
+      <p class="dv-k-sub">共 <span data-draw="k-count" data-source="summary" data-row="0" data-field="count">—</span> 筆配息</p>
+    </div>
+    <div class="dv-card">
+      <p class="dv-k-label">截至目前已除息</p>
+      <p class="dv-k-val dash-skeleton" data-draw="k-todate" data-source="toDate" data-field="cum">—</p>
+      <p class="dv-k-sub">除息日在今天以前，佔全年 <span data-draw="k-todate-share" data-source="toDate" data-field="share">—</span></p>
+    </div>
+    <div class="dv-card">
+      <p class="dv-k-label">平均每月</p>
+      <p class="dv-k-val dash-skeleton" data-draw="k-avg" data-source="summary" data-row="0" data-field="avg">—</p>
+      <p class="dv-k-sub">以 <span data-draw="k-months" data-source="summary" data-row="0" data-field="months">—</span> 個有配息的月份計</p>
+    </div>
+    <div class="dv-card">
+      <p class="dv-k-label">最高月份</p>
+      <p class="dv-k-val dash-skeleton" data-draw="k-peakAmt" data-source="summary" data-row="0" data-field="peakAmount">—</p>
+      <p class="dv-k-sub"><span data-draw="k-peak" data-source="summary" data-row="0" data-field="peakLabel">—</span></p>
+    </div>
+    <div class="dv-card">
+      <p class="dv-k-label">配息標的</p>
+      <p class="dv-k-val dash-skeleton" data-draw="k-stocks" data-source="summary" data-row="0" data-field="stocks">—</p>
+      <p class="dv-k-sub">檔股票／ETF</p>
+    </div>
+  </section>
+
+  <section class="dv-card" id="monthly">
+    <h2 class="dv-h">每月預估股利</h2>
+    <p class="dv-note">依除權息日所在月份加總。滑過看當月明細，點長條篩選下方明細表。</p>
+    <div class="dv-chart" data-draw="monthly" data-source="monthly divs"></div>
+  </section>
+
+  <div class="dv-grid">
+    <section class="dv-card" id="by-stock">
+      <div class="dv-tbar">
+        <h2 class="dv-h">各標的股利</h2>
+        <div class="dv-ctrls">
+          <select class="dash-select dv-month" data-draw="monthSel" data-source="monthly" aria-label="月份"></select>
+          <div class="dv-seg" role="group" aria-label="圖表類型">
+            <button type="button" class="dv-view" data-view="bar" aria-pressed="true">長條</button>
+            <button type="button" class="dv-view" data-view="pie" aria-pressed="false">圓餅</button>
+          </div>
+        </div>
+      </div>
+      <p class="dv-note">選全年看每檔合計，選月份看當月由哪些標的配息。和上方長條圖、下方明細表同步。</p>
+      <div class="dv-stock" data-draw="stock" data-source="byStock byStockMonth"></div>
+    </section>
+
+    <section class="dv-card" id="detail">
+      <div class="dv-tbar">
+        <h2 class="dv-h">配息明細</h2>
+        <button type="button" class="dv-btn dv-clear" hidden>顯示全部月份</button>
+      </div>
+      <p class="dv-note">依除權息日由新到舊。<span class="dv-sel" data-draw="sel"></span></p>
+      <div class="dv-tablebox">
+        <table class="dv-table" data-source="divs" data-row-key="code,date">
+          <thead><tr>
+            <th data-field="date">除權息日</th>
+            <th data-field="code">代碼</th>
+            <th data-field="name">名稱</th>
+            <th data-field="shares" class="num dv-opt">股數</th>
+            <th data-field="dps" class="num">每股股利</th>
+            <th data-field="yield" class="num dv-opt">殖利率%</th>
+            <th data-field="amount" class="num">預估股利</th>
+          </tr></thead>
+          <tbody data-draw="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+</div>
+</div>
+
+<script>
+// 設定：資料來源。之後接 Cloudflare Worker 時改成 Worker 的網址，例如 'https://xxx.workers.dev/api/dividends'
+window.DV_DATA_URL = window.DV_DATA_URL || 'data.csv';
+
+// 小型執行環境：提供 dash.data / dash.calc / dash.draw，讓下方頁面程式碼不用改
+window.dash = (() => {
+  const state = {};
+  const calcs = [];
+  const draws = {};
+  const run = (name) => document.querySelectorAll(`[data-draw="${name}"]`).forEach((el) => {
+    try { draws[name](el); } catch (e) { console.error(name, e); }
+  });
+  const compute = () => {
+    for (const c of calcs) {
+      const ins = c.inputs.map((i) => state[i] || { status: 'loading' });
+      const bad = ins.find((x) => x.status !== 'ok');
+      state[c.id] = bad ? { status: bad.status, data: [] } : { status: 'ok', data: c.fn(...ins.map((x) => x.data)) };
+    }
+  };
+  return {
+    colors: ['#3b6ea5', '#d08c3f', '#5a9a78', '#b5545c', '#7d6bb0', '#3f9aa6', '#a8864a', '#8a8f99'],
+    data: (id) => state[id] || { status: 'loading', data: [] },
+    calc: (id, def) => { calcs.push({ id, inputs: def.inputs, fn: def.fn }); },
+    draw: (name, fn) => { if (fn) draws[name] = fn; run(name); },
+    _set: (id, v) => { state[id] = v; compute(); Object.keys(draws).forEach(run); },
+    _redraw: () => Object.keys(draws).forEach(run)
+  };
+})();
+</script>
+<script>
+window.dvState = window.dvState || { month: null, view: 'bar' };
+window.dvSetMonth = (k) => {
+  window.dvState.month = k || null;
+  document.querySelectorAll('.dv-clear').forEach((b) => { b.hidden = !window.dvState.month; });
+  ['monthly', 'rows', 'sel', 'stock', 'monthSel'].forEach((n) => dash.draw(n));
+};
+document.querySelectorAll('.dv-view').forEach((b) => b.addEventListener('click', () => {
+  window.dvState.view = b.dataset.view;
+  document.querySelectorAll('.dv-view').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.view === window.dvState.view)));
+  dash.draw('stock');
+}));
+const num = (v) => Number(v);
+
+dash.calc('monthly', {
+  title: '每月預估股利',
+  description: '依除權息日的年月加總每筆預估股利。',
+  inputs: ['divs'],
+  fn: (divs) => {
+    const m = new Map();
+    for (const r of divs) {
+      const k = String(r.date).slice(0, 7);
+      const o = m.get(k) || { month: k, label: Number(k.slice(5)) + ' 月', amount: 0, count: 0 };
+      o.amount = Math.round((o.amount + Number(r.amount)) * 100) / 100;
+      o.count += 1;
+      m.set(k, o);
+    }
+    return [...m.values()].sort((a, b) => a.month.localeCompare(b.month));
+  }
+});
+
+dash.calc('byStock', {
+  title: '各標的全年股利',
+  description: '依股票代碼加總 2026 年每筆預估股利。',
+  inputs: ['divs'],
+  fn: (divs) => {
+    const m = new Map();
+    for (const r of divs) {
+      const o = m.get(r.code) || { code: r.code, name: r.name, amount: 0, count: 0 };
+      o.amount = Math.round((o.amount + Number(r.amount)) * 100) / 100;
+      o.count += 1;
+      m.set(r.code, o);
+    }
+    return [...m.values()].sort((a, b) => b.amount - a.amount);
+  }
+});
+
+dash.calc('byStockMonth', {
+  title: '各標的每月股利',
+  description: '依除權息月份與股票代碼加總每筆預估股利。',
+  inputs: ['divs'],
+  fn: (divs) => {
+    const m = new Map();
+    for (const r of divs) {
+      const month = String(r.date).slice(0, 7);
+      const key = month + '|' + r.code;
+      const o = m.get(key) || { month, code: r.code, name: r.name, amount: 0, count: 0 };
+      o.amount = Math.round((o.amount + Number(r.amount)) * 100) / 100;
+      o.count += 1;
+      m.set(key, o);
+    }
+    return [...m.values()].sort((a, b) => a.month.localeCompare(b.month) || b.amount - a.amount);
+  }
+});
+
+dash.calc('toDate', {
+  title: '累計已除息股利',
+  description: '依除權息日排序，逐日累計預估股利與佔全年比例。',
+  inputs: ['divs'],
+  fn: (divs) => {
+    const byDate = new Map();
+    let total = 0;
+    for (const r of divs) {
+      const a = Number(r.amount);
+      total += a;
+      byDate.set(r.date, (byDate.get(r.date) || 0) + a);
+    }
+    let cum = 0, count = 0;
+    const counts = new Map();
+    for (const r of divs) counts.set(r.date, (counts.get(r.date) || 0) + 1);
+    return [...byDate.keys()].sort().map((date) => {
+      cum += byDate.get(date);
+      count += counts.get(date);
+      return { date, cum: Math.round(cum * 100) / 100, count, share: Math.round((cum / total) * 10000) / 10000 };
+    });
+  }
+});
+
+dash.calc('summary', {
+  title: '全年摘要',
+  description: '全年合計、平均每月、最高月份與標的數。',
+  inputs: ['monthly', 'divs'],
+  fn: (monthly, divs) => {
+    const total = Math.round(monthly.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+    const peak = monthly.reduce((a, b) => (b.amount > a.amount ? b : a), monthly[0] || { amount: 0, label: '' });
+    return [{
+      total,
+      count: divs.length,
+      months: monthly.length,
+      avg: monthly.length ? Math.round(total / monthly.length) : 0,
+      peakLabel: peak.label,
+      peakAmount: peak.amount,
+      stocks: new Set(divs.map((r) => r.code)).size
+    }];
+  }
+});
+
+const f0 = d3.format(',.0f');
+const f2 = d3.format(',.2f');
+const fAmt = (v) => (Math.round(v) === v ? f0(v) : f2(v));
+
+function failLine(el) {
+  const p = document.createElement('div');
+  p.className = 'dv-fail';
+  p.textContent = '載入失敗';
+  el.replaceChildren(p);
+}
+
+const kpi = (name, field, fmt) => dash.draw(name, (el) => {
+  const s = dash.data('summary');
+  el.classList.toggle('dash-skeleton', s.status === 'loading');
+  el.textContent = s.status === 'ok' && s.data[0] ? fmt(s.data[0][field]) : '—';
+});
+kpi('t-total', 'total', f2);
+kpi('t-peak', 'peakLabel', String);
+kpi('t-peakAmt', 'peakAmount', fAmt);
+kpi('k-total', 'total', f2);
+kpi('k-count', 'count', f0);
+kpi('k-avg', 'avg', f0);
+kpi('k-months', 'months', f0);
+kpi('k-peakAmt', 'peakAmount', fAmt);
+kpi('k-peak', 'peakLabel', String);
+kpi('k-stocks', 'stocks', f0);
+
+const dvToday = d3.timeFormat('%Y-%m-%d')(new Date());
+const toDateDraw = (name, fmt) => dash.draw(name, (el) => {
+  const s = dash.data('toDate');
+  el.classList.toggle('dash-skeleton', s.status === 'loading');
+  const past = s.status === 'ok' ? s.data.filter((r) => String(r.date) <= dvToday) : [];
+  const row = past[past.length - 1];
+  if (row) { el.dataset.where = `date=${encodeURIComponent(row.date)}`; el.textContent = fmt(row); }
+  else { delete el.dataset.where; el.textContent = '—'; }
+});
+toDateDraw('k-todate', (r) => f2(r.cum));
+toDateDraw('k-todate-share', (r) => d3.format('.1%')(r.share));
+
+dash.draw('monthly', (el) => {
+  const m = dash.data('monthly');
+  const d = dash.data('divs');
+  el.classList.toggle('dash-skeleton', m.status === 'loading');
+  if (m.status !== 'ok') { if (m.status === 'error') failLine(el); else el.replaceChildren(); return; }
+  const rows = m.data;
+  const divs = d.status === 'ok' ? d.data : [];
+  const W = Math.max(280, el.clientWidth), H = 300;
+  el.replaceChildren();
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', '每月預估股利長條圖');
+  const yMax = d3.max(rows, (r) => r.amount) || 1;
+  const y = d3.scaleLinear([0, yMax * 1.12], [H - 28, 12]).nice();
+  const yFmt = (v) => (v === 0 ? '0' : (v / 10000) + ' 萬');
+  const ticks = y.ticks(5);
+  const probe = svg.append('text').attr('font-size', 12).attr('font-family', 'var(--font-anthropic-sans)');
+  let wMax = 0;
+  for (const t of ticks) { probe.text(yFmt(t)); wMax = Math.max(wMax, probe.node().getComputedTextLength()); }
+  probe.remove();
+  const ml = Math.ceil(wMax) + 10, mr = 8;
+  const x = d3.scaleBand(rows.map((r) => r.month), [ml, W - mr]).padding(0.28);
+  const g = svg.append('g');
+  g.selectAll('line.grid').data(ticks).join('line').attr('x1', ml).attr('x2', W - mr).attr('y1', (t) => y(t)).attr('y2', (t) => y(t)).style('stroke', 'var(--cds-chart-grid)');
+  g.selectAll('text.yt').data(ticks).join('text').attr('x', ml - 8).attr('y', (t) => y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').attr('font-size', 12).style('fill', 'var(--color-fg-muted)').text(yFmt);
+  g.selectAll('text.xt').data(rows).join('text').attr('x', (r) => x(r.month) + x.bandwidth() / 2).attr('y', H - 8).attr('text-anchor', 'middle').attr('font-size', 12).style('fill', 'var(--color-fg-muted)').text((r) => (x.bandwidth() < 22 ? String(Number(r.month.slice(5))) : r.label));
+  const sel = window.dvState.month;
+  const bw = Math.min(32, x.bandwidth());
+  const bars = g.selectAll('rect.dv-bar').data(rows).join('rect').attr('class', 'dv-bar')
+    .attr('x', (r) => x(r.month) + (x.bandwidth() - bw) / 2).attr('width', bw)
+    .attr('y', (r) => y(r.amount)).attr('height', (r) => y(0) - y(r.amount)).attr('rx', 3)
+    .style('fill', (r) => (sel && sel !== r.month ? 'var(--cds-chart-muted)' : dash.colors[0]));
+  if (x.bandwidth() >= 40) {
+    g.selectAll('text.vl').data(rows).join('text').attr('x', (r) => x(r.month) + x.bandwidth() / 2).attr('y', (r) => y(r.amount) - 5).attr('text-anchor', 'middle').attr('font-size', 11).style('fill', 'var(--color-fg-muted)').text((r) => (r.amount >= 10000 ? (Math.round(r.amount / 1000) / 10) + '萬' : f0(r.amount)));
+  }
+  const tip = document.createElement('div');
+  tip.className = 'dv-tip';
+  tip.hidden = true;
+  el.append(tip);
+  const showTip = (ev, r) => {
+    const items = divs.filter((v) => String(v.date).slice(0, 7) === r.month).sort((a, b) => Number(b.amount) - Number(a.amount));
+    const head = document.createElement('div'); head.className = 'dv-tip-h'; head.textContent = `2026 年 ${r.label}・${r.count} 筆`;
+    const lines = items.slice(0, 6).map((v) => {
+      const row = document.createElement('div'); row.className = 'dv-tip-row';
+      const a = document.createElement('span'); a.textContent = `${v.code} ${v.name}`;
+      const b = document.createElement('span'); b.textContent = fAmt(Number(v.amount));
+      row.append(a, b); return row;
+    });
+    if (items.length > 6) {
+      const rest = items.slice(6).reduce((s, v) => s + Number(v.amount), 0);
+      const row = document.createElement('div'); row.className = 'dv-tip-row';
+      const a = document.createElement('span'); a.textContent = `其他 ${items.length - 6} 筆`;
+      const b = document.createElement('span'); b.textContent = fAmt(Math.round(rest * 100) / 100);
+      row.append(a, b); lines.push(row);
+    }
+    const tot = document.createElement('div'); tot.className = 'dv-tip-row dv-tip-tot';
+    const ta = document.createElement('span'); ta.textContent = '合計';
+    const tb = document.createElement('span'); tb.textContent = fAmt(r.amount);
+    tot.append(ta, tb);
+    tip.replaceChildren(head, ...lines, tot);
+    tip.hidden = false;
+    const box = el.getBoundingClientRect();
+    const scale = box.width / W;
+    const cx = (x(r.month) + x.bandwidth() / 2) * scale;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = cx + 12; if (left + tw > box.width) left = cx - tw - 12; if (left < 0) left = 0;
+    let top = y(r.amount) * scale - th / 2; top = Math.max(0, Math.min(top, el.clientHeight - th));
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  };
+  bars.on('pointerenter', function (ev, r) { d3.select(this).attr('opacity', 0.85); showTip(ev, r); })
+    .on('pointerleave', function () { d3.select(this).attr('opacity', null); tip.hidden = true; })
+    .on('click', (ev, r) => window.dvSetMonth(window.dvState.month === r.month ? null : r.month));
+});
+
+dash.draw('monthSel', (sel) => {
+  const m = dash.data('monthly');
+  const opts = [new Option('全年', '')];
+  if (m.status === 'ok') for (const r of m.data) opts.push(new Option(r.label, r.month));
+  sel.replaceChildren(...opts);
+  sel.value = window.dvState.month || '';
+  sel.onchange = () => window.dvSetMonth(sel.value || null);
+});
+
+function stockBars(el, rows, W) {
+  const rowH = 24, H = rows.length * rowH + 8;
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img').attr('aria-label', '各標的股利長條圖');
+  const label = (r) => `${r.code} ${r.name}`;
+  const probe = svg.append('text').attr('font-size', 12);
+  let lw = 0, vw = 0;
+  for (const r of rows) {
+    probe.text(label(r)); lw = Math.max(lw, probe.node().getComputedTextLength());
+    probe.text(fAmt(r.amount)); vw = Math.max(vw, probe.node().getComputedTextLength());
+  }
+  probe.remove();
+  lw = Math.min(lw, W * 0.45);
+  const ml = Math.ceil(lw) + 10, mr = Math.ceil(vw) + 10;
+  const x = d3.scaleLinear([0, d3.max(rows, (r) => r.amount) || 1], [ml, Math.max(ml + 20, W - mr)]);
+  const g = svg.append('g');
+  const yy = (i) => 4 + i * rowH;
+  g.selectAll('text.lb').data(rows).join('text').attr('x', ml - 8).attr('y', (r, i) => yy(i) + rowH / 2).attr('dy', '0.32em').attr('text-anchor', 'end').attr('font-size', 12).style('fill', 'var(--color-fg)').text(label);
+  g.selectAll('rect').data(rows).join('rect').attr('x', ml).attr('y', (r, i) => yy(i) + 5).attr('height', rowH - 10).attr('width', (r) => Math.max(1, x(r.amount) - ml)).attr('rx', 2).style('fill', (r, i) => (i < 5 ? dash.colors[0] : 'var(--cds-chart-muted)'));
+  g.selectAll('text.vl').data(rows).join('text').attr('x', (r) => x(r.amount) + 6).attr('y', (r, i) => yy(i) + rowH / 2).attr('dy', '0.32em').attr('font-size', 12).style('fill', 'var(--color-fg-muted)').text((r) => fAmt(r.amount));
+}
+
+function stockPie(el, rows, W) {
+  const total = d3.sum(rows, (r) => r.amount) || 1;
+  const nTop = rows.length > 8 ? 7 : rows.length;
+  const items = rows.slice(0, nTop).map((r, i) => ({ label: `${r.code} ${r.name}`, amount: r.amount, color: `color-mix(in oklab, ${dash.colors[i % dash.colors.length]} 55%, var(--cds-chart-muted))` }));
+  const rest = rows.slice(nTop);
+  if (rest.length) items.push({ label: `其他 ${rest.length} 檔`, amount: Math.round(d3.sum(rest, (r) => r.amount) * 100) / 100, color: 'var(--cds-chart-muted)' });
+  const pct = d3.format('.1%');
+  const wrap = document.createElement('div');
+  wrap.className = 'dv-pie';
+  el.append(wrap);
+  const R = Math.max(70, Math.min(130, (W >= 520 ? W * 0.22 : W / 2 - 12)));
+  const S = R * 2 + 8;
+  const svg = d3.select(wrap).append('svg').attr('width', S).attr('height', S).attr('viewBox', `0 0 ${S} ${S}`).attr('role', 'img').attr('aria-label', '各標的股利占比圓餅圖');
+  const g = svg.append('g').attr('transform', `translate(${S / 2},${S / 2})`);
+  const arcs = d3.pie().sort(null).value((d) => d.amount)(items);
+  const arc = d3.arc().innerRadius(0).outerRadius(R);
+  const arcHi = d3.arc().innerRadius(0).outerRadius(R + 4);
+  const tip = document.createElement('div');
+  tip.className = 'dv-tip';
+  tip.hidden = true;
+  el.append(tip);
+  g.selectAll('path').data(arcs).join('path').attr('d', arc).style('fill', (a) => a.data.color).style('stroke', 'var(--color-panel)').attr('stroke-width', 1.5)
+    .on('pointermove', function (ev, a) {
+      d3.select(this).attr('d', arcHi);
+      const h = document.createElement('div'); h.className = 'dv-tip-h'; h.textContent = a.data.label;
+      const row = document.createElement('div'); row.className = 'dv-tip-row';
+      const s1 = document.createElement('span'); s1.textContent = pct(a.data.amount / total);
+      const s2 = document.createElement('span'); s2.textContent = fAmt(a.data.amount);
+      row.append(s1, s2);
+      tip.replaceChildren(h, row);
+      tip.hidden = false;
+      const [px, py] = d3.pointer(ev, el);
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      let left = px + 12; if (left + tw > el.clientWidth) left = px - tw - 12; if (left < 0) left = 0;
+      tip.style.left = left + 'px';
+      tip.style.top = Math.max(0, py - th - 8) + 'px';
+    })
+    .on('pointerleave', function () { d3.select(this).attr('d', arc); tip.hidden = true; });
+  if (items.length === 1) g.select('path').style('stroke', null);
+  const ul = document.createElement('ul');
+  ul.className = 'dv-legend';
+  for (const it of items) {
+    const li = document.createElement('li');
+    const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = it.color;
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = it.label;
+    const pc = document.createElement('span'); pc.className = 'pc'; pc.textContent = pct(it.amount / total);
+    const am = document.createElement('span'); am.className = 'am'; am.textContent = fAmt(it.amount);
+    li.append(sw, nm, pc, am);
+    ul.append(li);
+  }
+  wrap.append(ul);
+}
+
+dash.draw('stock', (el) => {
+  const k = window.dvState.month;
+  const s = dash.data(k ? 'byStockMonth' : 'byStock');
+  el.classList.toggle('dash-skeleton', s.status === 'loading');
+  if (s.status !== 'ok') { if (s.status === 'error') failLine(el); else el.replaceChildren(); return; }
+  const rows = k ? s.data.filter((r) => r.month === k).sort((a, b) => b.amount - a.amount) : s.data;
+  const W = Math.max(280, el.clientWidth);
+  el.replaceChildren();
+  if (!rows.length) {
+    const p = document.createElement('p'); p.className = 'dv-empty'; p.textContent = '這個月沒有配息。';
+    el.append(p); return;
+  }
+  if (window.dvState.view === 'pie') stockPie(el, rows, W); else stockBars(el, rows, W);
+});
+
+dash.draw('sel', (el) => {
+  const k = window.dvState.month;
+  el.textContent = k ? `目前只顯示 ${Number(k.slice(5))} 月。` : '';
+});
+
+dash.draw('rows', (tb) => {
+  const d = dash.data('divs');
+  if (d.status !== 'ok') { tb.replaceChildren(); return; }
+  const k = window.dvState.month;
+  const rows = d.data.filter((r) => !k || String(r.date).slice(0, 7) === k)
+    .slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || Number(b.amount) - Number(a.amount));
+  tb.replaceChildren(...rows.map((r) => {
+    const tr = document.createElement('tr');
+    tr.dataset.key = `${encodeURIComponent(r.code)},${encodeURIComponent(r.date)}`;
+    const cells = [
+      [r.date, ''], [r.code, ''], [r.name, ''],
+      [f0(num(r.shares)), 'num dv-opt'], [String(num(r.dps)), 'num'],
+      [String(num(r.yield)), 'num dv-opt'], [fAmt(num(r.amount)), 'num']
+    ];
+    for (const [t, c] of cells) { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.append(td); }
+    return tr;
+  }));
+});
+
+document.querySelectorAll('.dv-clear').forEach((b) => b.addEventListener('click', () => window.dvSetMonth(null)));
+</script>
+
+<script>
+// 從 URL hash 取得 token（LINE 登入後導回時帶入）
+(function () {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const t = hash.get('token');
+  if (t) { localStorage.setItem('dv_token', t); history.replaceState(null, '', location.pathname); }
+})();
+
+const dvToken = localStorage.getItem('dv_token');
+
+function dvLoad() {
+  const url = window.DV_DATA_URL;
+  const isWorker = url.startsWith('http') && !url.includes('github.io');
+  const opts = isWorker && dvToken ? { headers: { Authorization: `Bearer ${dvToken}` } } : { credentials: 'include' };
+  fetch(url, opts)
+    .then((r) => {
+      if (r.status === 401 && isWorker) {
+        // 未登入 → 導向 LINE Login
+        location.href = `${url.replace(/\/api\/dividends.*/, '')}/auth/line?redirect=${encodeURIComponent(location.href)}`;
+        return;
+      }
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    })
+    .then((t) => {
+      if (!t) return;
+      const rows = t.trim().startsWith('[') || t.trim().startsWith('{') ? (() => { const j = JSON.parse(t); return Array.isArray(j) ? j : (j.rows || j.data || []); })() : d3.csvParse(t);
+      dash._set('divs', { status: 'ok', data: rows });
+    })
+    .catch((e) => { console.error(e); dash._set('divs', { status: 'error', data: [] }); });
+}
+dvLoad();
+
+let dvW = window.innerWidth;
+window.addEventListener('resize', () => { if (Math.abs(window.innerWidth - dvW) < 2) return; dvW = window.innerWidth; clearTimeout(window.dvRz); window.dvRz = setTimeout(() => dash._redraw(), 150); });
+</script>
+</body>
+</html>
